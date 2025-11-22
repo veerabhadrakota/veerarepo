@@ -28,6 +28,7 @@
 Create a `.env` file in the project root and configure the following environment variables. These variables control the
 behavior of the orchestrator and agents.
 
+```
 # Logging
 LOG_LEVEL=INFO # Default: INFO. Controls the verbosity of logging.
 
@@ -64,4 +65,6 @@ TESTCASE_REVIEW_EXTERNAL_PORT=8004
 # Agent Discovery (for remote agents)
 REMOTE_EXECUTION_AGENT_HOSTS=http://localhost # Default: http://localhost. Comma-separated URLs of remote agent hosts.
 AGENT_DISCOVERY_PORTS=8001-8006 # Default: 8001-8006. Port range for agent discovery.
+```
+
 
