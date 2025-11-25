@@ -76,7 +76,8 @@ node -v
 
 2. Install MCP globally
 ```
-npm install -g @azure-devops/mcp
+npm install -g @azure-devops/mcp --save
+
 ```
 
 3. Verify the global install
@@ -90,6 +91,34 @@ If installation is OK, you should see help text with options like:
 --authentication
 --domains
 
+4. Install Az CLI
+```
+az login
+az account show
+az account set --subscription "Your Subscription Name"
+az account set --subscription "<Subscription-ID>"
+```
+
+5. Confirm DevOps Access
+```
+az devops project list --organization "https://dev.azure.com/your_org"
+```
+6. Check work-item access directly with Azure CLI
+```
+az extension add --name azure-devops
+az login                # interactive, if needed
+az devops configure --defaults organization=https://dev.azure.com/your_org
+az boards work-item show --id 1 --org "https://dev.azure.com/your_org" --project "your_org" --output json
+
+az devops project list --organization "https://dev.azure.com/your_org" --output json |
+  ConvertFrom-Json | Select-Object -ExpandProperty value | Select-Object id,name
+```
+
+Issues:
+Your Azure CLI sign-in is blocked by a Conditional Access policy: "device is not compliant". That prevents az/azcli from providing usable credentials to the MCP server, which is why MCP tool calls fail with TF400813.
+Evidence: az account show output contains the CA error text: "Conditional Access policy requires a compliant device... device is not compliant." This blocks interactive az login for that account in this environment
+
+
 4. Create an Azure DevOps PAT (Personal Access Token)
 
 5. Set the PAT as environment variable (Windows)
@@ -98,8 +127,10 @@ Quick way (for current PowerShell session only)
 
 In PowerShell:
 ```
-$env:AZURE_DEVOPS_EXT_PAT = "YOUR_PAT_VALUE_HERE"
-echo $env:AZURE_DEVOPS_EXT_PAT
+# set PAT
+$env:AZURE_DEVOPS_EXT_PAT = 'YOUR_PAT_HERE'
+# make azdevops use it (optional — helps some flows)
+az devops login --organization "https://dev.azure.com/YOUR_ORGANIZATION_NAME" --token $env:AZURE_DEVOPS_EXT_PAT
 ```
 
 5.1 Test ADO Access

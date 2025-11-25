@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional
 from mcp.client.session import ClientSession
 from mcp.client.stdio import stdio_client, StdioServerParameters
 
+from models.work_item_request import GetWorkItemRequest
+from models.work_item_response import WorkItemResponse
 
 class AdoMcpClient:
     """
@@ -13,29 +15,32 @@ class AdoMcpClient:
       - starting the MCP server via npx
       - calling tools like wit_get_work_item, wit_add_work_item_comment
     """
+    def __init__(self, org_url, project, auth_mode: str = "azure-cli"):
+        allowed_modes = {"azure-cli", "pat", "azure-identity"}
+        if auth_mode not in allowed_modes:
+            raise ValueError(f"Invalid auth_mode: {auth_mode}. Must be one of {allowed_modes}")
 
-    def __init__(self, org_url: str, pat_env_var: str = "AZURE_DEVOPS_EXT_PAT"):
-        pat = os.getenv(pat_env_var)
-        if not pat:
-            raise RuntimeError(
-                f"Environment variable {pat_env_var} is not set. "
-                f"Please set your Azure DevOps PAT in {pat_env_var}."
-            )
+        # Base environment configuration
+        environ = {
+            "AZURE_DEVOPS_ORG_URL": org_url,
+            "AZURE_DEVOPS_AUTH_METHOD": auth_mode,
+            "AZURE_DEVOPS_DEFAULT_PROJECT": project
+        }
+
+        # Additional rule for PAT mode
+        if auth_mode == "pat":
+            pat = os.getenv("AZURE_DEVOPS_PAT")
+            if not pat:
+                raise ValueError("auth_mode is 'pat' but no PAT provided")
+            environ["AZURE_DEVOPS_PAT"] = pat
 
         self.server_params = StdioServerParameters(
             command="npx",
             args=[
                 "-y",
-                "@azure-devops/mcp@next",
-                "server",
-                org_url,
-                "--authentication",
-                "azcli",
-                "--domains",
-                "core",
-                "work-items",
-                "test-plans",
-            ]
+                "@tiberriver256/mcp-server-azure-devops"
+            ],
+            env=environ
         )
 
     async def list_tools(self) -> List[str]:
@@ -105,20 +110,28 @@ class AdoMcpClient:
         project: str,
         work_item_id: int,
         fields: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+    ) -> WorkItemResponse:
         """
         Get a single work item. Returns a dict with fields like 'fields', 'id', etc.
         """
-        params: Dict[str, Any] = {
-            "project": project,
-            "id": work_item_id,
-        }
-        if fields:
-            params["fields"] = fields
+        if not project:
+            raise ValueError("project cannot be empty")
 
-        result = await self._raw_call_tool("wit_get_work_item", params)
+        if work_item_id <= 0:
+            raise ValueError("work_item_id must be a positive integer")
+
+        request = GetWorkItemRequest(
+            project=project,
+            workItemId=work_item_id,
+            fields=fields,
+        )
+
+        print("Requesting work item:", request)
+
+        result = await self._raw_call_tool("get_work_item", request.model_dump(exclude_none=True))
         structured = self._extract_structured(result)
 
+        return WorkItemResponse(**structured)
         # We expect something like:
         # {
         #   "id": 123,
@@ -127,11 +140,6 @@ class AdoMcpClient:
         #       "System.Description": "..."
         #   }
         # }
-        if isinstance(structured, dict):
-            return structured
-        else:
-            # If it's not dict, wrap so caller can still use it
-            return {"raw": structured}
 
     async def add_work_item_comment(
         self,
